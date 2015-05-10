@@ -1,0 +1,119 @@
+<?php
+date_default_timezone_set('Asia/Chongqing');
+$table = 'ustc_lug';
+
+$id2from = array();
+$email2name = array();
+$reply = array();
+$date = array();
+$rs = mysql_query("SELECT message_id, `from`, in_reply_to, date FROM $table");
+while ($row = mysql_fetch_array($rs)) {
+    $row['from'] = str_replace("@googlemail.com", "@gmail.com", $row['from']);
+    preg_match("/([a-zA-Z0-9_.+-]+)@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+/", $row['from'], $matches);
+    $email = $matches[0];
+    if (isset($email2name[$email])) {
+        if (isset($email2name[$email][$row['from']]))
+            $email2name[$email][$row['from']]++;
+        else
+            $email2name[$email][$row['from']] = 1;
+    } else {
+        $email2name[$email] = array();
+        $email2name[$email][$row['from']] = 1;
+    }
+    $id2from[$row['message_id']] = $email;
+    $date[$row['message_id']] = $row['date'];
+    if (!empty($row['in_reply_to']))
+        $reply[$row['message_id']] = $row['in_reply_to'];
+    else // main thread
+        $reply[$row['message_id']] = $row['message_id'];
+}
+
+foreach ($email2name as $email => &$froms) {
+    $maxfrom = '';
+    $max = 0;
+    foreach ($froms as $from => $count)
+        if ($count > $max) {
+            $max = $count;
+            $maxfrom = $from;
+        }
+    $froms = $maxfrom;
+}
+unset($froms);
+
+mkjson(function($date){return true;}, "all.json");
+
+for ($year = 2009; $year <= 2012; $year ++) {
+    mkjson(function($date) use($year){
+        return $date >= mktime(0,0,0,1,1,$year) && $date < mktime(0,0,0,1,1,$year+1);
+    }, "year-$year.json");
+    for ($month = 1; $month <= 12; $month ++) {
+        mkjson(function($date) use($year,$month){
+            return $date >= mktime(0,0,0,$month,1,$year) && $date < mktime(0,0,0,$month+1,1,$year);
+        }, "month-$year-$month.json");
+    }
+}
+
+function mkjson($filterfunc, $filename) {
+    global $id2from, $email2name, $reply, $date;
+
+    echo "Generating $filename\n";
+
+    $fromcount = array();
+    $links = array();
+    foreach ($reply as $message_id => $in_reply_to) {
+        if (!$filterfunc($date[$message_id]))
+            continue;
+        $from = $id2from[$message_id];
+        if (isset($fromcount[$from]))
+            $fromcount[$from]++;
+        else
+            $fromcount[$from] = 1;
+        if (!isset($id2from[$in_reply_to]))
+            continue;
+        $to = $id2from[$in_reply_to];
+        if (isset($links[$from][$to]))
+            $links[$from][$to]++;
+        else
+            $links[$from][$to] = 1;
+    }
+    
+    $arr = array('nodes'=>array(), 'links'=>array());
+    
+    $nodesno = array();
+    $index = 0;
+    foreach ($fromcount as $from => $count) {
+        $title = str_replace('@', ' AT ', $from);
+        $name = str_replace(array($from, '<', '>', '"'), '', $email2name[$from]);
+        $name = trim($name);
+        $arr['nodes'][$index] = array(
+            'name'  => $name, 
+            'title' => $title, 
+            'size'  => $count,
+        );
+        $nodesno[$from] = $index;
+        $index++;
+    }
+    
+    foreach ($links as $from => $tos)
+        foreach ($tos as $to => $count) {
+            $fromno = $nodesno[$from];
+            if (!isset($nodesno[$to]))
+                continue;
+            $tono = $nodesno[$to];
+            if ($fromno > $tono) {
+                if (isset($links[$to][$from]))
+                    $count += $links[$to][$from];
+                $arr['links'][] = array(
+                    'source'=> $fromno,
+                    'target'=> $tono,
+                    'value' => $count,
+                );
+            }
+        }
+    
+    @mkdir("json");
+    $fp = fopen("json/$filename", "w");
+    fwrite($fp, json_encode($arr));
+    fclose($fp);
+}
+?>

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<head>
+<title>Connections in USTC_LUG Mailing List</title>
+</head>
+<style>
+body {
+  margin:0;
+  padding:0;
+}
+
+circle.person {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+line.link {
+  stroke: #999;
+  stroke-opacity: .6;
+}
+
+text.incircle {
+  font-size:10px;
+  color:#000;
+}
+text.incircle:hover {
+  cursor:default;
+}
+.nav {
+  position:fixed;
+  color:#000;
+  border:5px solid #CCC;
+  background-color:#FFF;
+  opacity:0.9;
+}
+</style>
+<body>
+<div class="nav">
+  <label for="backboneOnly">
+    <input id="backboneOnly" type="checkbox" checked="checked" onchange="render();" />突出主干
+  </label>
+  <br>
+  线宽
+  <select id="widthRatio" onchange="render();">
+    <option value="3.0">300%</option>
+    <option value="2.0">200%</option>
+    <option value="1.5">150%</option>
+    <option value="1.2">120%</option>
+    <option value="1.0" selected="selected">100%</option>
+    <option value="0.85">85%</option>
+    <option value="0.7">70%</option>
+    <option value="0.5">50%</option>
+    <option value="0.3">30%</option>
+    <option value="0.2">20%</option>
+  </select>
+  <br>
+  <select id="dateFilter" onchange="render();">
+    <option value="all" selected="selected">显示全部</option>
+    <option value="year-2009">2009全年</option>
+    <option value="year-2010">2010全年</option>
+    <option value="year-2011">2011全年</option>
+    <option value="year-2012">2012全年</option>
+    <option value="month-2009-3">2009年3月</option>
+    <option value="month-2009-4">2009年4月</option>
+    <option value="month-2009-5">2009年5月</option>
+    <option value="month-2009-6">2009年6月</option>
+    <option value="month-2009-7">2009年7月</option>
+    <option value="month-2009-9">2009年9月</option>
+    <option value="month-2009-10">2009年10月</option>
+    <option value="month-2009-11">2009年11月</option>
+    <option value="month-2009-12">2009年12月</option>
+    <option value="month-2010-5">2010年5月</option>
+    <option value="month-2010-8">2010年8月</option>
+    <option value="month-2010-9">2010年9月</option>
+    <option value="month-2010-10">2010年10月</option>
+    <option value="month-2010-11">2010年11月</option>
+    <option value="month-2010-12">2010年12月</option>
+    <option value="month-2011-1">2011年1月</option>
+    <option value="month-2011-2">2011年2月</option>
+    <option value="month-2011-3">2011年3月</option>
+    <option value="month-2011-4">2011年4月</option>
+    <option value="month-2011-5">2011年5月</option>
+    <option value="month-2011-6">2011年6月</option>
+    <option value="month-2011-7">2011年7月</option>
+    <option value="month-2011-8">2011年8月</option>
+    <option value="month-2011-9">2011年9月</option>
+    <option value="month-2011-10">2011年10月</option>
+    <option value="month-2011-11">2011年11月</option>
+    <option value="month-2011-12">2011年12月</option>
+    <option value="month-2012-1">2012年1月</option>
+    <option value="month-2012-2">2012年2月</option>
+    <option value="month-2012-3">2012年3月</option>
+    <option value="month-2012-4">2012年4月</option>
+    <option value="month-2012-5">2012年5月</option>
+    <option value="month-2012-6">2012年6月</option>
+    <option value="month-2012-7">2012年7月</option>
+    <option value="month-2012-8">2012年8月</option>
+    <option value="month-2012-9">2012年9月</option>
+    <option value="month-2012-10">2012年10月</option>
+    <option value="month-2012-11">2012年11月</option>
+    <option value="month-2012-12">2012年12月</option>
+  </select>
+  <br>
+  <button onclick="render();">重绘当前图</button>
+</div>
+<script src="d3.v3.min.js"></script>
+<script>
+
+function render() {
+
+d3.select("svg").remove();
+
+var width = 1500,
+    height = 1500;
+
+var color = d3.scale.category20();
+
+var force = d3.layout.force()
+    .charge(-960)
+    .linkDistance(400)
+    .size([width, height]);
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+var filename = "json/" + document.getElementById("dateFilter").value + ".json";
+
+d3.json(filename, function(error, graph) {
+  force
+      .nodes(graph.nodes)
+      .links(graph.links)
+      .start();
+
+  var maxLink = 0;
+  var totalLink = 0;
+  for (link in graph.links) {
+      if (graph.links[link].value > maxLink)
+        maxLink = graph.links[link].value;
+      totalLink += graph.links[link].value;
+  }
+  var avgLink = totalLink / graph.nodes.length;
+
+  var widthRatio = document.getElementById('widthRatio').value;
+
+  var link = svg.selectAll("line.link")
+      .data(graph.links)
+    .enter().append("line")
+      .attr("class", "link")
+      .style("stroke-width", function(d) { 
+         if (document.getElementById('backboneOnly').checked)
+            return d.value / maxLink * widthRatio * 20;
+         else
+            return Math.sqrt(d.value) / Math.sqrt(totalLink) * widthRatio * 20;
+         });
+
+  link.append("title")
+      .text(function(d) { return d.value; } );
+
+  var node = svg.selectAll("g.node")
+      .data(graph.nodes)
+    .enter().append("g")
+      .attr("class", "node")
+      .call(force.drag);
+    
+  node.append("title")
+      .text(function(d) { return d.title + " (" + d.size + ")"; } );
+
+  var circle = node.append("circle")
+      .attr("class", "person")
+      .attr("r", function(d) { return 10 + Math.sqrt(d.size); })
+      .style("fill", function(d) { return color(Math.floor(Math.random()*10)); });
+
+  var text = node.append("text")
+      .attr("class", "incircle")
+      .text(function(d) {return d.name;})
+      .attr("text-anchor", "middle")
+      .attr("dy", "0.31em")
+      .attr("x", function(d) {return d.x;})
+      .attr("y", function(d) {return d.y;});
+
+  force.on("tick", function() {
+    link.attr("x1", function(d) { return d.source.x; })
+        .attr("y1", function(d) { return d.source.y; })
+        .attr("x2", function(d) { return d.target.x; })
+        .attr("y2", function(d) { return d.target.y; });
+
+    circle.attr("cx", function(d) { return d.x; })
+        .attr("cy", function(d) { return d.y; });
+    text.attr("x", function(d) { return d.x; })
+        .attr("y", function(d) { return d.y; });
+  });
+});
+
+} // end function render
+
+render();
+
+</script>
